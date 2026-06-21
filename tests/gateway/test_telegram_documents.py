@@ -261,6 +261,48 @@ class TestDocumentDownloadBlock:
         assert event.media_types == ["application/zip"]
 
     @pytest.mark.asyncio
+    async def test_amr_document_is_routed_as_voice(self, adapter):
+        """Cube ACR / Telegram .amr uploads should be transcribed automatically."""
+        file_obj = _make_file_obj(b"#!AMR\n\x00\x01fake-amr")
+        doc = _make_document(
+            file_name="call-recording.amr",
+            mime_type="audio/amr",
+            file_size=64,
+            file_obj=file_obj,
+        )
+        msg = _make_message(document=doc, caption="transkrybuj")
+        update = _make_update(msg)
+
+        await adapter._handle_media_message(update, MagicMock())
+        event = adapter.handle_message.call_args[0][0]
+
+        assert event.message_type == MessageType.VOICE
+        assert event.media_urls and event.media_urls[0].endswith(".amr")
+        assert event.media_types == ["audio/amr"]
+        assert "Unsupported document type" not in (event.text or "")
+        assert "transkrybuj" in event.text
+
+    @pytest.mark.asyncio
+    async def test_audio_mime_document_without_known_extension_is_routed_as_voice(self, adapter):
+        """Telegram audio documents with odd filenames still reach STT."""
+        file_obj = _make_file_obj(b"fake-audio")
+        doc = _make_document(
+            file_name="recording.bin",
+            mime_type="audio/amr",
+            file_size=32,
+            file_obj=file_obj,
+        )
+        msg = _make_message(document=doc)
+        update = _make_update(msg)
+
+        await adapter._handle_media_message(update, MagicMock())
+        event = adapter.handle_message.call_args[0][0]
+
+        assert event.message_type == MessageType.VOICE
+        assert event.media_urls and event.media_urls[0].endswith(".amr")
+        assert event.media_types == ["audio/amr"]
+
+    @pytest.mark.asyncio
     async def test_png_document_is_routed_as_image(self, adapter):
         """Telegram documents that are really PNGs should use the image path."""
         file_obj = _make_file_obj(b"\x89PNG\r\n\x1a\n" + b"\x00" * 16)
