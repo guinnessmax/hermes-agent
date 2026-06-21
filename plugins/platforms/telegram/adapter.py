@@ -105,6 +105,16 @@ _TELEGRAM_IMAGE_EXT_TO_MIME = {
     ".gif": "image/gif",
 }
 
+_TELEGRAM_AUDIO_DOCUMENT_TYPES = {
+    ".amr": "audio/amr",
+    ".ogg": "audio/ogg",
+    ".opus": "audio/opus",
+    ".mp3": "audio/mpeg",
+    ".m4a": "audio/mp4",
+    ".wav": "audio/wav",
+    ".flac": "audio/flac",
+}
+
 
 MAX_COMMANDS_PER_SCOPE = 30
 
@@ -6386,6 +6396,20 @@ class TelegramAdapter(BasePlatformAdapter):
                     event.media_types = [SUPPORTED_VIDEO_TYPES[ext]]
                     event.message_type = MessageType.VIDEO
                     logger.info("[Telegram] Cached user video document at %s", cached_path)
+                    await self.handle_message(event)
+                    return
+
+                if ext in _TELEGRAM_AUDIO_DOCUMENT_TYPES or doc_mime.startswith("audio/"):
+                    file_obj = await doc.get_file()
+                    audio_bytes = await file_obj.download_as_bytearray()
+                    audio_ext = ext if ext in _TELEGRAM_AUDIO_DOCUMENT_TYPES else ".ogg"
+                    cached_path = cache_audio_from_bytes(bytes(audio_bytes), ext=audio_ext)
+                    event.media_urls = [cached_path]
+                    event.media_types = [
+                        doc_mime if doc_mime.startswith("audio/") else _TELEGRAM_AUDIO_DOCUMENT_TYPES[audio_ext]
+                    ]
+                    event.message_type = MessageType.AUDIO
+                    logger.info("[Telegram] Cached user audio document at %s", cached_path)
                     await self.handle_message(event)
                     return
 
